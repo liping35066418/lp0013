@@ -7,7 +7,7 @@ import { daysAgoStr, todayStr } from '@/lib/utils';
 import ProductCard from '@/components/ProductCard';
 
 const TIME_OPTIONS = [
-  { label: '全部时间', value: '' },
+  { label: '全部时间', value: 'all' },
   { label: '今天', value: todayStr() },
   { label: '近3天', value: daysAgoStr(3) },
   { label: '近7天', value: daysAgoStr(7) },
@@ -30,7 +30,8 @@ export default function Home() {
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
-  const [timeRange, setTimeRange] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [timeRange, setTimeRange] = useState<string>('all');
   const [keywordInput, setKeywordInput] = useState('');
 
   useEffect(() => { init(); }, [init]);
@@ -48,9 +49,15 @@ export default function Home() {
     };
     if (minPrice !== '') q.minPrice = Number(minPrice);
     if (maxPrice !== '') q.maxPrice = Number(maxPrice);
-    if (startDate) q.startDate = startDate;
+    if (startDate || endDate) {
+      if (startDate) q.startDate = startDate;
+      if (endDate) q.endDate = endDate;
+    } else if (timeRange && timeRange !== 'all') {
+      q.startDate = timeRange;
+      q.endDate = todayStr();
+    }
     return q;
-  }, [keyword, categoryId, minPrice, maxPrice, startDate]);
+  }, [keyword, categoryId, minPrice, maxPrice, startDate, endDate, timeRange]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -97,12 +104,14 @@ export default function Home() {
     setMinPrice('');
     setMaxPrice('');
     setStartDate('');
-    setTimeRange('');
+    setEndDate('');
+    setTimeRange('all');
   };
 
   const handleTimeRange = (val: string) => {
     setTimeRange(val);
-    setStartDate(val);
+    setStartDate('');
+    setEndDate('');
   };
 
   const toggleFavorite = useCallback(async (productId: number) => {
@@ -124,10 +133,10 @@ export default function Home() {
     let c = 0;
     if (categoryId) c++;
     if (minPrice !== '' || maxPrice !== '') c++;
-    if (startDate) c++;
+    if (startDate || endDate || (timeRange && timeRange !== 'all')) c++;
     if (keyword) c++;
     return c;
-  }, [categoryId, minPrice, maxPrice, startDate, keyword]);
+  }, [categoryId, minPrice, maxPrice, startDate, endDate, timeRange, keyword]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30">
@@ -230,10 +239,17 @@ export default function Home() {
 
               <div>
                 <label className="flex items-center gap-1 text-sm font-medium text-slate-700 mb-2">
-                  自定义起始日期
+                  自定义日期区间
                 </label>
-                <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setTimeRange(e.target.value); }}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                <div className="flex items-center gap-2">
+                  <input type="date" value={startDate} max={endDate || undefined}
+                    onChange={(e) => { setStartDate(e.target.value); setTimeRange('all'); }}
+                    className="flex-1 min-w-0 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  <span className="text-slate-400">—</span>
+                  <input type="date" value={endDate} min={startDate || undefined}
+                    onChange={(e) => { setEndDate(e.target.value); setTimeRange('all'); }}
+                    className="flex-1 min-w-0 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-slate-100">
