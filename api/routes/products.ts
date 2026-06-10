@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import db from '../db.js';
 import { checkViolation } from '../services/moderation.js';
-import type { Product, ApiResponse, ProductListQuery, ProductStatus } from '../../shared/types.js';
+import type { Product, ApiResponse, ProductListQuery, ProductStatus, SortBy } from '../../shared/types.js';
 
 const router = Router();
 
@@ -67,6 +67,14 @@ router.get('/', (req: Request, res: Response): void => {
       SELECT COUNT(*) as total FROM products p ${whereSql}
     `).get(...params) as { total: number };
 
+    const sortBy: SortBy = query.sortBy || 'latest';
+    let orderSql = 'ORDER BY p.created_at DESC';
+    if (sortBy === 'price_asc') {
+      orderSql = 'ORDER BY p.price ASC, p.created_at DESC';
+    } else if (sortBy === 'price_desc') {
+      orderSql = 'ORDER BY p.price DESC, p.created_at DESC';
+    }
+
     const page = Math.max(1, Number(query.page) || 1);
     const pageSize = Math.min(100, Number(query.pageSize) || 20);
     const offset = (page - 1) * pageSize;
@@ -76,7 +84,7 @@ router.get('/', (req: Request, res: Response): void => {
       FROM products p 
       LEFT JOIN categories c ON p.category_id = c.id
       ${whereSql}
-      ORDER BY p.created_at DESC
+      ${orderSql}
       LIMIT ? OFFSET ?
     `).all(...params, pageSize, offset);
 

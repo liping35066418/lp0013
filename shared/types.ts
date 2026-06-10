@@ -40,6 +40,8 @@ export interface Favorite {
   product?: Product;
 }
 
+export type SortBy = 'latest' | 'price_asc' | 'price_desc';
+
 export interface ProductListQuery {
   categoryId?: number;
   minPrice?: number;
@@ -50,6 +52,7 @@ export interface ProductListQuery {
   status?: ProductStatus;
   page?: number;
   pageSize?: number;
+  sortBy?: SortBy;
 }
 
 export interface ApiResponse<T> {

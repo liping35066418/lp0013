@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Search, SlidersHorizontal, X, Tag, CalendarRange, DollarSign, RefreshCw, Package } from 'lucide-react';
-import type { Category, Product, ProductListQuery } from '../../shared/types';
+import { Search, SlidersHorizontal, X, Tag, CalendarRange, DollarSign, RefreshCw, Package, ArrowUpDown } from 'lucide-react';
+import type { Category, Product, ProductListQuery, SortBy } from '../../shared/types';
 import { categoriesApi, productsApi, favoritesApi } from '@/lib/api';
 import { useToastStore, useUserStore } from '@/store';
 import { daysAgoStr, todayStr } from '@/lib/utils';
@@ -14,27 +14,54 @@ const TIME_OPTIONS = [
   { label: '近30天', value: daysAgoStr(30) },
 ];
 
+const SORT_OPTIONS: Array<{ label: string; value: SortBy }> = [
+  { label: '最新发布', value: 'latest' },
+  { label: '价格从低到高', value: 'price_asc' },
+  { label: '价格从高到低', value: 'price_desc' },
+];
+
 export default function Home() {
   const { userId, nickname, init } = useUserStore();
   const { push } = useToastStore();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [favMap, setFavMap] = useState<Record<number, boolean>>({});
   const [showFilter, setShowFilter] = useState(false);
 
+  // 已应用状态（真正传给 API 的）
   const [keyword, setKeyword] = useState('');
   const [categoryId, setCategoryId] = useState<number | undefined>();
-  const [minPrice, setMinPrice] = useState<string>('');
-  const [maxPrice, setMaxPrice] = useState<string>('');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
-  const [timeRange, setTimeRange] = useState<string>('all');
+  const [appliedMinPrice, setAppliedMinPrice] = useState<string>('');
+  const [appliedMaxPrice, setAppliedMaxPrice] = useState<string>('');
+  const [appliedStartDate, setAppliedStartDate] = useState<string>('');
+  const [appliedEndDate, setAppliedEndDate] = useState<string>('');
+  const [appliedTimeRange, setAppliedTimeRange] = useState<string>('all');
+  const [appliedSortBy, setAppliedSortBy] = useState<SortBy>('latest');
+
+  // 草稿状态（筛选面板内调整，暂不生效）
   const [keywordInput, setKeywordInput] = useState('');
+  const [draftMinPrice, setDraftMinPrice] = useState<string>('');
+  const [draftMaxPrice, setDraftMaxPrice] = useState<string>('');
+  const [draftStartDate, setDraftStartDate] = useState<string>('');
+  const [draftEndDate, setDraftEndDate] = useState<string>('');
+  const [draftTimeRange, setDraftTimeRange] = useState<string>('all');
+  const [draftSortBy, setDraftSortBy] = useState<SortBy>('latest');
 
   useEffect(() => { init(); }, [init]);
+
+  // 打开筛选面板时，把已应用状态同步到草稿状态
+  useEffect(() => {
+    if (showFilter) {
+      setDraftMinPrice(appliedMinPrice);
+      setDraftMaxPrice(appliedMaxPrice);
+      setDraftStartDate(appliedStartDate);
+      setDraftEndDate(appliedEndDate);
+      setDraftTimeRange(appliedTimeRange);
+      setDraftSortBy(appliedSortBy);
+    }
+  }, [showFilter, appliedMinPrice, appliedMaxPrice, appliedStartDate, appliedEndDate, appliedTimeRange, appliedSortBy]);
 
   const fetchCategories = useCallback(async () => {
     const res = await categoriesApi.list();
@@ -46,18 +73,19 @@ export default function Home() {
       keyword: keyword || undefined,
       categoryId,
       pageSize: 50,
+      sortBy: appliedSortBy,
     };
-    if (minPrice !== '') q.minPrice = Number(minPrice);
-    if (maxPrice !== '') q.maxPrice = Number(maxPrice);
-    if (startDate || endDate) {
-      if (startDate) q.startDate = startDate;
-      if (endDate) q.endDate = endDate;
-    } else if (timeRange && timeRange !== 'all') {
-      q.startDate = timeRange;
+    if (appliedMinPrice !== '') q.minPrice = Number(appliedMinPrice);
+    if (appliedMaxPrice !== '') q.maxPrice = Number(appliedMaxPrice);
+    if (appliedStartDate || appliedEndDate) {
+      if (appliedStartDate) q.startDate = appliedStartDate;
+      if (appliedEndDate) q.endDate = appliedEndDate;
+    } else if (appliedTimeRange && appliedTimeRange !== 'all') {
+      q.startDate = appliedTimeRange;
       q.endDate = todayStr();
     }
     return q;
-  }, [keyword, categoryId, minPrice, maxPrice, startDate, endDate, timeRange]);
+  }, [keyword, categoryId, appliedMinPrice, appliedMaxPrice, appliedStartDate, appliedEndDate, appliedTimeRange, appliedSortBy]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -65,7 +93,6 @@ export default function Home() {
     setLoading(false);
     if (res.success) {
       setProducts(res.data || []);
-      setTotal(res.total || 0);
     } else {
       push(res.message || '加载失败', 'error');
     }
@@ -97,21 +124,38 @@ export default function Home() {
     setKeyword(keywordInput.trim());
   };
 
+  const handleApplyFilter = () => {
+    setAppliedMinPrice(draftMinPrice);
+    setAppliedMaxPrice(draftMaxPrice);
+    setAppliedStartDate(draftStartDate);
+    setAppliedEndDate(draftEndDate);
+    setAppliedTimeRange(draftTimeRange);
+    setAppliedSortBy(draftSortBy);
+  };
+
   const handleReset = () => {
     setKeyword('');
     setKeywordInput('');
     setCategoryId(undefined);
-    setMinPrice('');
-    setMaxPrice('');
-    setStartDate('');
-    setEndDate('');
-    setTimeRange('all');
+    const empty = { minPrice: '', maxPrice: '', startDate: '', endDate: '', timeRange: 'all', sortBy: 'latest' as SortBy };
+    setAppliedMinPrice(empty.minPrice);
+    setAppliedMaxPrice(empty.maxPrice);
+    setAppliedStartDate(empty.startDate);
+    setAppliedEndDate(empty.endDate);
+    setAppliedTimeRange(empty.timeRange);
+    setAppliedSortBy(empty.sortBy);
+    setDraftMinPrice(empty.minPrice);
+    setDraftMaxPrice(empty.maxPrice);
+    setDraftStartDate(empty.startDate);
+    setDraftEndDate(empty.endDate);
+    setDraftTimeRange(empty.timeRange);
+    setDraftSortBy(empty.sortBy);
   };
 
   const handleTimeRange = (val: string) => {
-    setTimeRange(val);
-    setStartDate('');
-    setEndDate('');
+    setDraftTimeRange(val);
+    setDraftStartDate('');
+    setDraftEndDate('');
   };
 
   const toggleFavorite = useCallback(async (productId: number) => {
@@ -132,11 +176,12 @@ export default function Home() {
   const activeFilterCount = useMemo(() => {
     let c = 0;
     if (categoryId) c++;
-    if (minPrice !== '' || maxPrice !== '') c++;
-    if (startDate || endDate || (timeRange && timeRange !== 'all')) c++;
+    if (appliedMinPrice !== '' || appliedMaxPrice !== '') c++;
+    if (appliedStartDate || appliedEndDate || (appliedTimeRange && appliedTimeRange !== 'all')) c++;
+    if (appliedSortBy !== 'latest') c++;
     if (keyword) c++;
     return c;
-  }, [categoryId, minPrice, maxPrice, startDate, endDate, timeRange, keyword]);
+  }, [categoryId, appliedMinPrice, appliedMaxPrice, appliedStartDate, appliedEndDate, appliedTimeRange, appliedSortBy, keyword]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30">
@@ -183,7 +228,7 @@ export default function Home() {
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-500">共 <b className="text-indigo-600">{total}</b> 件</span>
+            <span className="text-sm text-slate-500">共 <b className="text-indigo-600">{products.length}</b> 件</span>
             <button
               onClick={() => setShowFilter((s) => !s)}
               className="relative inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition-colors"
@@ -207,17 +252,17 @@ export default function Home() {
 
         {showFilter && (
           <div className="mb-5 p-5 bg-white rounded-2xl shadow-sm border border-slate-100 animate-fadeIn">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               <div>
                 <label className="flex items-center gap-1 text-sm font-medium text-slate-700 mb-2">
                   <DollarSign className="w-4 h-4 text-indigo-500" />
                   价格区间 (元)
                 </label>
                 <div className="flex items-center gap-2">
-                  <input type="number" min="0" value={minPrice} onChange={(e) => setMinPrice(e.target.value)}
+                  <input type="number" min="0" value={draftMinPrice} onChange={(e) => setDraftMinPrice(e.target.value)}
                     placeholder="最低" className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                   <span className="text-slate-400">—</span>
-                  <input type="number" min="0" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)}
+                  <input type="number" min="0" value={draftMaxPrice} onChange={(e) => setDraftMaxPrice(e.target.value)}
                     placeholder="最高" className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                 </div>
               </div>
@@ -230,7 +275,7 @@ export default function Home() {
                 <div className="flex flex-wrap gap-1.5">
                   {TIME_OPTIONS.map((o) => (
                     <button key={o.label} onClick={() => handleTimeRange(o.value)}
-                      className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${timeRange === o.value ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                      className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${draftTimeRange === o.value ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                       {o.label}
                     </button>
                   ))}
@@ -242,21 +287,37 @@ export default function Home() {
                   自定义日期区间
                 </label>
                 <div className="flex items-center gap-2">
-                  <input type="date" value={startDate} max={endDate || undefined}
-                    onChange={(e) => { setStartDate(e.target.value); setTimeRange('all'); }}
+                  <input type="date" value={draftStartDate} max={draftEndDate || undefined}
+                    onChange={(e) => { setDraftStartDate(e.target.value); setDraftTimeRange('all'); }}
                     className="flex-1 min-w-0 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                   <span className="text-slate-400">—</span>
-                  <input type="date" value={endDate} min={startDate || undefined}
-                    onChange={(e) => { setEndDate(e.target.value); setTimeRange('all'); }}
+                  <input type="date" value={draftEndDate} min={draftStartDate || undefined}
+                    onChange={(e) => { setDraftEndDate(e.target.value); setDraftTimeRange('all'); }}
                     className="flex-1 min-w-0 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
                 </div>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-1 text-sm font-medium text-slate-700 mb-2">
+                  <ArrowUpDown className="w-4 h-4 text-indigo-500" />
+                  排序
+                </label>
+                <select
+                  value={draftSortBy}
+                  onChange={(e) => setDraftSortBy(e.target.value as SortBy)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+                >
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-5 pt-4 border-t border-slate-100">
               <button onClick={handleReset} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors inline-flex items-center gap-1">
                 <X className="w-4 h-4" /> 重置
               </button>
-              <button onClick={fetchProducts} className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-medium rounded-lg shadow-md hover:shadow-lg transition-shadow">
+              <button onClick={handleApplyFilter} className="px-5 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-sm font-medium rounded-lg shadow-md hover:shadow-lg transition-shadow">
                 应用筛选
               </button>
             </div>
